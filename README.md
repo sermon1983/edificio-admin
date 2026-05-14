@@ -1,85 +1,66 @@
 # 🏢 AdminEdificio — Sistema de Gestión de Condominios
 
-Aplicación web completa para la administración de edificios y condominios.
+Aplicación web conectada a **Google Sheets** como base de datos.
 
 ## Módulos
+- 📊 Dashboard · 💰 Gastos Comunes · 💧 Consumos (agua/luz)
+- 🛡️ Rondas de Seguridad · ⚠️ Incidentes · 🔧 Órdenes de Trabajo
 
-- 📊 **Dashboard** — Resumen general con gráficos y estadísticas
-- 💰 **Gastos Comunes** — Registro y control de egresos
-- 💧 **Consumos** — Lecturas de agua y luz por unidad
-- 🛡️ **Rondas de Seguridad** — Control de guardias y novedades
-- ⚠️ **Incidentes** — Reportes y seguimiento de eventos
-- 🔧 **Órdenes de Trabajo** — Vista Kanban y lista de mantenciones
+---
 
-## Stack Tecnológico
+## ⚡ Configuración en 3 pasos
 
-- **React 18** + **Vite**
-- **React Router v6**
-- **Recharts** (gráficos)
-- **Lucide React** (íconos)
-- **localStorage** (persistencia de datos)
+### Paso 1 — Crear el Google Apps Script
 
-## Instalación Local
+1. Ve a [script.google.com](https://script.google.com) → **Nuevo proyecto**
+2. Borra el código que aparece y pega el contenido de `apps-script/Code.gs`
+3. Guarda el proyecto (Ctrl+S) con el nombre `AdminEdificio API`
+
+### Paso 2 — Inicializar las hojas de Google Sheets
+
+1. En el editor de Apps Script, selecciona la función `initSheets` en el menú desplegable
+2. Haz clic en **Ejecutar** ▶ → acepta los permisos cuando te lo pida
+3. Se crearán automáticamente 5 hojas con datos de ejemplo en tu Google Sheets
+
+### Paso 3 — Desplegar como Web App
+
+1. En el editor de Apps Script: **Implementar → Nueva implementación**
+2. Tipo: **Aplicación web**
+3. Configuración:
+   - Ejecutar como: **Yo** (tu cuenta Google)
+   - Quién tiene acceso: **Cualquier persona**
+4. Haz clic en **Implementar** y copia la **URL del Web App**
+
+### Paso 4 — Conectar con el frontend
+
+**En desarrollo local:** crea un archivo `.env.local` en la raíz:
+```
+VITE_SCRIPT_URL=https://script.google.com/macros/s/TU_ID/exec
+```
+
+**En Vercel:** ve a tu proyecto → Settings → Environment Variables:
+```
+Nombre:  VITE_SCRIPT_URL
+Valor:   https://script.google.com/macros/s/TU_ID/exec
+```
+
+---
+
+## 🚀 Instalación local
 
 ```bash
-# Instalar dependencias
 npm install
-
-# Iniciar servidor de desarrollo
 npm run dev
-
-# Compilar para producción
-npm run build
 ```
 
-## Despliegue en Vercel (vía GitHub)
+## 🌐 Despliegue en Vercel
 
-### Opción 1: Interfaz web de Vercel (Recomendado)
+1. Sube el proyecto a GitHub
+2. Conecta en [vercel.com](https://vercel.com) → Add New Project
+3. Agrega la variable de entorno `VITE_SCRIPT_URL` en Settings
+4. Haz clic en **Deploy**
 
-1. **Sube el proyecto a GitHub:**
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit: AdminEdificio"
-   git remote add origin https://github.com/TU_USUARIO/edificio-admin.git
-   git push -u origin main
-   ```
+---
 
-2. **Conecta con Vercel:**
-   - Ve a [vercel.com](https://vercel.com) e inicia sesión con GitHub
-   - Haz clic en **"Add New Project"**
-   - Selecciona el repositorio `edificio-admin`
-   - Vercel detectará automáticamente que es un proyecto Vite
-   - Deja la configuración por defecto y haz clic en **"Deploy"**
-   - ¡Listo! Tu app estará en `https://edificio-admin.vercel.app`
-
-### Opción 2: Vercel CLI
-
-```bash
-# Instalar Vercel CLI
-npm i -g vercel
-
-# Desplegar
-vercel --prod
-```
-
-## Configuración del Proyecto (Vercel lo detecta automáticamente)
-
-| Campo | Valor |
-|-------|-------|
-| Framework | Vite |
-| Build Command | `npm run build` |
-| Output Directory | `dist` |
-| Install Command | `npm install` |
-
-## Personalización
-
-- **Nombre del edificio:** Edita `brand-sub` en `src/components/Sidebar.jsx`
-- **Unidades/Departamentos:** Modifica el array `UNIDADES` en `src/pages/Consumos.jsx`
-- **Guardias:** Modifica `GUARDIAS` en `src/pages/RondasSeguridad.jsx`
-- **Datos iniciales:** Edita `INITIAL_DATA` en `src/hooks/useStore.js`
-
-## Notas
-
-- Los datos se guardan en **localStorage** del navegador (no requiere backend)
-- Para producción con base de datos, conecta una API (Supabase, PlanetScale, etc.)
+## Stack
+React 18 · Vite · React Router v6 · Recharts · Lucide React · Google Apps Script

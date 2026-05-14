@@ -2,12 +2,14 @@ import React, { useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar.jsx'
 import Header from './components/Header.jsx'
+import SetupBanner from './components/SetupBanner.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import GastosComunes from './pages/GastosComunes.jsx'
 import Consumos from './pages/Consumos.jsx'
 import RondasSeguridad from './pages/RondasSeguridad.jsx'
 import Incidentes from './pages/Incidentes.jsx'
 import OrdenesTrabajos from './pages/OrdenesTrabajos.jsx'
+import { isConfigured } from './api.js'
 import './App.css'
 
 export default function App() {
@@ -28,6 +30,7 @@ export default function App() {
           </Routes>
         </main>
       </div>
+      {!isConfigured() && <SetupBanner />}
     </div>
   )
 }
