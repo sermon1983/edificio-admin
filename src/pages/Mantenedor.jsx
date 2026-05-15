@@ -32,7 +32,7 @@ export default function Mantenedor() {
   const [formUs,    setFormUs]    = useState(EMPTY_US)
   const [savingUs,  setSavingUs]  = useState(false)
 
-  useEffect(() => { loadEdificios() }, [])
+  useEffect(() => { loadEdificios(); loadUsuarios() }, [])
   useEffect(() => { if (tab === 'usuarios') loadUsuarios() }, [tab])
 
   async function loadEdificios() {
@@ -92,12 +92,11 @@ export default function Mantenedor() {
         const data = { ...formUs }
         if (!data.password) delete data.password
         await api.updateUsuario(token, editUs.id, data)
-        setUsuarios(us => us.map(u => u.id === editUs.id ? { ...u, ...formUs, password: '••••••' } : u))
       } else {
-        const created = await api.createUsuario(token, formUs)
-        setUsuarios(us => [...us, { ...created, password: '••••••' }])
+        await api.createUsuario(token, formUs)
       }
       setModalUs(false)
+      await loadUsuarios()
     } catch(e) { alert('Error: ' + e.message) }
     finally { setSavingUs(false) }
   }
@@ -196,8 +195,8 @@ export default function Mantenedor() {
                       <td style={{ fontFamily:'var(--font-mono)', fontSize:12.5 }}>{u.email}</td>
                       <td><span className={`badge ${u.rol==='superadmin'?'badge-purple':'badge-blue'}`}>{u.rol}</span></td>
                       <td style={{ fontSize:12, color:'var(--text-muted)' }}>
-                        {u.edificios_ids
-                          ? u.edificios_ids.split(',').map(id => {
+                        {String(u.edificios_ids || '').trim()
+                          ? String(u.edificios_ids).split(',').filter(Boolean).map(id => {
                               const ed = edificios.find(e => String(e.id) === id.trim())
                               return ed ? <span key={id} style={{ display:'inline-flex', alignItems:'center', gap:4, background:'var(--bg-elevated)', border:'1px solid var(--border-subtle)', borderRadius:5, padding:'2px 7px', fontSize:11, marginRight:4 }}>{ed.nombre}</span> : null
                             })
