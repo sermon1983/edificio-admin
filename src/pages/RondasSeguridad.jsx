@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { Plus, X, Shield, CheckCircle, Clock, MapPin, Trash2 } from 'lucide-react'
+import ImageUpload from '../components/ImageUpload.jsx'
 import { useSheetData } from '../hooks/useSheetData.js'
 import { LoadingState, ErrorState } from '../components/LoadingState.jsx'
 
 const GUARDIAS = ['Carlos Muñoz','Pedro Rojas','Ana Soto','Luis Pérez']
 const ZONAS_DISPONIBLES = ['Estacionamiento','Hall','Azotea','Piscina','Gimnasio','Escaleras','Perímetro','Sala de Reuniones','Bodega','Lobby']
 const ESTADOS  = ['Programada','En Curso','Completada']
-const EMPTY = { guardia:'Carlos Muñoz', inicio:'', fin:'', zonas:[], novedades:'', estado:'Programada' }
+const EMPTY = { guardia:'Carlos Muñoz', inicio:'', fin:'', zonas:[], novedades:'', estado:'Programada', imagenes:'' }
 
 function parseZonas(z) {
   if (!z) return []
@@ -99,6 +100,13 @@ export default function RondasSeguridad() {
                     {r.novedades && (
                       <p style={{ marginTop:8, fontSize:12.5, color:'var(--text-secondary)', background:'var(--bg-elevated)', borderLeft:'3px solid var(--border-bright)', padding:'6px 10px', borderRadius:'0 6px 6px 0' }}>{r.novedades}</p>
                     )}
+                    {r.imagenes && String(r.imagenes).trim() && (
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
+                        {String(r.imagenes).split(',').filter(Boolean).map((url,i)=>(
+                          <img key={i} src={url.trim()} alt="" onClick={()=>window.open(url.trim(),'_blank')} style={{ width:64, height:64, objectFit:'cover', borderRadius:6, border:'1px solid var(--border-main)', cursor:'pointer' }}/>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
@@ -141,6 +149,9 @@ export default function RondasSeguridad() {
               </div>
               <div className="form-group"><label>Novedades</label>
                 <textarea className="form-control" value={form.novedades} onChange={e=>setForm(f=>({...f,novedades:e.target.value}))} placeholder="Observaciones de la ronda..."/>
+              </div>
+              <div className="form-group"><label>Imágenes</label>
+                <ImageUpload value={form.imagenes} onChange={v=>setForm(f=>({...f,imagenes:v}))} label="Adjuntar fotos de la ronda"/>
               </div>
             </div>
             <div className="modal-footer">

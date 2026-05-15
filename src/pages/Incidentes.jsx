@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { Plus, X, AlertTriangle, Trash2, Search, ChevronRight } from 'lucide-react'
+import ImageUpload from '../components/ImageUpload.jsx'
 import { useSheetData } from '../hooks/useSheetData.js'
 import { LoadingState, ErrorState } from '../components/LoadingState.jsx'
 
 const TIPOS      = ['Infraestructura','Convivencia','Equipamiento','Seguridad','Otro']
 const PRIORIDADES = ['Alta','Media','Baja']
 const ESTADOS    = ['Abierto','En Proceso','Resuelto','Cerrado']
-const EMPTY = { titulo:'', tipo:'Infraestructura', prioridad:'Media', reportado_por:'', fecha:'', estado:'Abierto', descripcion:'' }
+const EMPTY = { titulo:'', tipo:'Infraestructura', prioridad:'Media', reportado_por:'', fecha:'', estado:'Abierto', descripcion:'', imagenes:'' }
 
 export default function Incidentes() {
   const { data: incidentes, loading, error, create, update, remove, reload } = useSheetData('incidentes')
@@ -130,6 +131,16 @@ export default function Incidentes() {
                 <p style={{ fontSize:11, color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>Descripción</p>
                 <p style={{ color:'var(--text-secondary)', fontSize:13.5, lineHeight:1.6 }}>{detail.descripcion||'Sin descripción.'}</p>
               </div>
+              {detail.imagenes && String(detail.imagenes).trim() && (
+                <div style={{ marginBottom:16 }}>
+                  <p style={{ fontSize:11, color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Imágenes</p>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                    {String(detail.imagenes).split(',').filter(Boolean).map((url,i)=>(
+                      <img key={i} src={url.trim()} alt="" onClick={()=>window.open(url.trim(),'_blank')} style={{ width:80, height:80, objectFit:'cover', borderRadius:8, border:'1px solid var(--border-main)', cursor:'pointer' }}/>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div><p style={{ fontSize:11, color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>Cambiar Estado</p>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                   {ESTADOS.map(e=><button key={e} className={`btn btn-sm ${detail.estado===e?'btn-primary':'btn-ghost'}`} onClick={()=>changeEstado(detail.id,e)}>{e}</button>)}
@@ -170,6 +181,9 @@ export default function Incidentes() {
               </div>
               <div className="form-group"><label>Descripción</label>
                 <textarea className="form-control" value={form.descripcion} onChange={e=>setForm(f=>({...f,descripcion:e.target.value}))} placeholder="Detalle del incidente..."/>
+              </div>
+              <div className="form-group"><label>Imágenes</label>
+                <ImageUpload value={form.imagenes} onChange={v=>setForm(f=>({...f,imagenes:v}))} label="Adjuntar fotos del incidente"/>
               </div>
             </div>
             <div className="modal-footer">

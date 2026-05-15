@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { Plus, X, Wrench, Trash2, Search, Calendar, CheckCircle } from 'lucide-react'
+import ImageUpload from '../components/ImageUpload.jsx'
 import { useSheetData } from '../hooks/useSheetData.js'
 import { LoadingState, ErrorState } from '../components/LoadingState.jsx'
 
 const CATEGORIAS  = ['Eléctrica','Gasfitería','Pintura','Carpintería','Limpieza','Jardinería','Ascensores','General']
 const PRIORIDADES = ['Alta','Media','Baja']
 const ESTADOS     = ['Pendiente','En Proceso','Completada','Cancelada']
-const EMPTY = { titulo:'', categoria:'General', prioridad:'Media', asignado_a:'', fecha_creacion:'', fecha_limite:'', estado:'Pendiente', descripcion:'' }
+const EMPTY = { titulo:'', categoria:'General', prioridad:'Media', asignado_a:'', fecha_creacion:'', fecha_limite:'', estado:'Pendiente', descripcion:'', imagenes:'' }
 
 export default function OrdenesTrabajos() {
   const { data: ordenes, loading, error, create, update, remove, reload } = useSheetData('ordenes')
@@ -162,6 +163,9 @@ export default function OrdenesTrabajos() {
               <div className="form-group"><label>Descripción</label>
                 <textarea className="form-control" value={form.descripcion} onChange={e=>setForm(f=>({...f,descripcion:e.target.value}))} placeholder="Detalle de los trabajos..."/>
               </div>
+              <div className="form-group"><label>Imágenes</label>
+                <ImageUpload value={form.imagenes} onChange={v=>setForm(f=>({...f,imagenes:v}))} label="Adjuntar fotos de la orden"/>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={()=>setModal(false)}>Cancelar</button>
@@ -190,6 +194,13 @@ function OrdCard({ o, prioColor, onDel, onEstado }) {
         <p style={{ marginTop:4, fontSize:11.5, color:'var(--text-dim)', display:'flex', alignItems:'center', gap:5 }}>
           <Calendar size={11}/> {o.fecha_limite}
         </p>
+      )}
+      {o.imagenes && String(o.imagenes).trim() && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:8 }}>
+          {String(o.imagenes).split(',').filter(Boolean).map((url,i)=>(
+            <img key={i} src={url.trim()} alt="" onClick={()=>window.open(url.trim(),'_blank')} style={{ width:52, height:52, objectFit:'cover', borderRadius:6, border:'1px solid var(--border-main)', cursor:'pointer' }}/>
+          ))}
+        </div>
       )}
       {o.estado !== 'Completada' && (
         <button className="btn btn-ghost btn-sm" style={{ marginTop:10, fontSize:11 }} onClick={()=>onEstado(o.id, o.estado==='Pendiente'?'En Proceso':'Completada')}>

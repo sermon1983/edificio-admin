@@ -57,4 +57,8 @@ export const api = {
 
   // ── Init ──────────────────────────────────────────────────
   init: () => post({ action: 'init' }),
+
+  // ── Imágenes ──────────────────────────────────────────────
+  uploadImage: (token, base64, mimeType, filename) =>
+    post({ action: 'uploadImage', token, base64, mimeType, filename }),
 }

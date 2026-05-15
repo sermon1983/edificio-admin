@@ -12,6 +12,7 @@ const TITLES = {
   '/rondas':      { title: 'Rondas de Seguridad',    sub: 'Control de guardias y registro' },
   '/incidentes':  { title: 'Gestión de Incidentes',  sub: 'Reportes y seguimiento' },
   '/ordenes':     { title: 'Órdenes de Trabajo',     sub: 'Mantenimiento y reparaciones' },
+  '/recaudacion': { title: 'Recaudación GGCC', sub: 'Cobro de gastos comunes por unidad' },
   '/mantenedor':  { title: 'Mantenedor',             sub: 'Edificios y usuarios del sistema' },
 }
 
@@ -50,3 +51,6 @@ export default function Header({ onMenuClick }) {
     </header>
   )
 }
+
+// CSS extra para mobile header-user-info
+// Handled via index.css media queries
