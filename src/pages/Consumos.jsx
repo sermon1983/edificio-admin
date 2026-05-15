@@ -16,12 +16,18 @@ export default function Consumos() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('Todos')
-  const [filtroMes, setFiltroMes]   = useState('2025-04')
+  const [filtroMes, setFiltroMes]   = useState('')
+
+  // Normaliza el campo mes a "yyyy-MM" sin importar cómo lo devuelva Sheets
+  function normalizeMes(val) {
+    if (!val) return ''
+    return String(val).slice(0, 7) // toma solo los primeros 7 chars: "2025-04"
+  }
 
   const filtered = consumos.filter(c =>
     (c.unidad||'').toLowerCase().includes(search.toLowerCase()) &&
     (filtroTipo === 'Todos' || c.tipo === filtroTipo) &&
-    (!filtroMes || c.mes === filtroMes)
+    (!filtroMes || normalizeMes(c.mes) === filtroMes)
   )
 
   const totalAgua  = filtered.filter(c=>c.tipo==='Agua').reduce((a,c)=>a+(Number(c.lectura_actual)-Number(c.lectura_anterior)),0)
@@ -82,7 +88,8 @@ export default function Consumos() {
           <option>Todos</option>{TIPOS.map(t=><option key={t}>{t}</option>)}
         </select>
         <select className="form-control" style={{ width:'auto' }} value={filtroMes} onChange={e=>setFiltroMes(e.target.value)}>
-          {MESES.map(m=><option key={m}>{m}</option>)}
+          <option value="">Todos los meses</option>
+          {[...new Set(consumos.map(c => normalizeMes(c.mes)).filter(Boolean))].sort().reverse().map(m=><option key={m} value={m}>{m}</option>)}
         </select>
       </div>
 
@@ -103,7 +110,7 @@ export default function Consumos() {
                         <span style={{ color:'var(--text-primary)', fontWeight:500 }}>{c.tipo}</span>
                       </span></td>
                       <td>{c.unidad}</td>
-                      <td style={{ fontFamily:'var(--font-mono)', fontSize:12 }}>{c.mes}</td>
+                      <td style={{ fontFamily:'var(--font-mono)', fontSize:12 }}>{normalizeMes(c.mes)}</td>
                       <td style={{ fontFamily:'var(--font-mono)' }}>{Number(c.lectura_anterior).toLocaleString()}</td>
                       <td style={{ fontFamily:'var(--font-mono)' }}>{Number(c.lectura_actual).toLocaleString()}</td>
                       <td style={{ fontFamily:'var(--font-mono)', fontWeight:600, color:'var(--text-primary)' }}>{cons} {c.tipo==='Agua'?'m³':'kWh'}</td>

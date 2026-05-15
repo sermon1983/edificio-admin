@@ -1,5 +1,3 @@
-// URL del Web App de Google Apps Script
-// Configúrala en .env.local → VITE_SCRIPT_URL=https://script.google.com/macros/s/TU_ID/exec
 const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL
 
 export function isConfigured() {
@@ -14,50 +12,49 @@ async function request(url, options = {}) {
   return json.data
 }
 
+async function post(body) {
+  return request(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(body),
+  })
+}
+
 export const api = {
-  // Leer todos los datos de una hoja
-  async getSheet(sheetName) {
-    return request(`${SCRIPT_URL}?sheet=${sheetName}`)
-  },
+  // ── Auth ──────────────────────────────────────────────────
+  login: (email, password) => post({ action: 'login', email, password }),
+  logout: (token) => post({ action: 'logout', token }),
 
-  // Leer todas las hojas de una vez (para el Dashboard)
-  async getAllSheets() {
-    return request(SCRIPT_URL)
-  },
+  // ── Edificios ─────────────────────────────────────────────
+  getEdificios: (token) =>
+    request(`${SCRIPT_URL}?action=getEdificios&token=${token}`),
+  createEdificio: (token, data) =>
+    post({ action: 'createEdificio', token, data }),
+  updateEdificio: (token, id, data) =>
+    post({ action: 'updateEdificio', token, id, data }),
+  deleteEdificio: (token, id) =>
+    post({ action: 'deleteEdificio', token, id }),
 
-  // Crear una fila nueva
-  async createRow(sheetName, data) {
-    return request(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'create', sheet: sheetName, data }),
-    })
-  },
+  // ── Usuarios ──────────────────────────────────────────────
+  getUsuarios: (token) =>
+    request(`${SCRIPT_URL}?action=getUsuarios&token=${token}`),
+  createUsuario: (token, data) =>
+    post({ action: 'createUsuario', token, data }),
+  updateUsuario: (token, id, data) =>
+    post({ action: 'updateUsuario', token, id, data }),
+  deleteUsuario: (token, id) =>
+    post({ action: 'deleteUsuario', token, id }),
 
-  // Actualizar campos de una fila existente
-  async updateRow(sheetName, id, data) {
-    return request(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'update', sheet: sheetName, id, data }),
-    })
-  },
+  // ── Datos por edificio ────────────────────────────────────
+  getSheet: (sheetName, buildingId, token) =>
+    request(`${SCRIPT_URL}?sheet=${sheetName}&building_id=${buildingId}&token=${token}`),
+  createRow: (sheetName, buildingId, token, data) =>
+    post({ action: 'create', sheet: sheetName, building_id: buildingId, token, data }),
+  updateRow: (sheetName, buildingId, token, id, data) =>
+    post({ action: 'update', sheet: sheetName, building_id: buildingId, token, id, data }),
+  deleteRow: (sheetName, buildingId, token, id) =>
+    post({ action: 'delete', sheet: sheetName, building_id: buildingId, token, id }),
 
-  // Eliminar una fila
-  async deleteRow(sheetName, id) {
-    return request(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'delete', sheet: sheetName, id }),
-    })
-  },
-
-  // Inicializar hojas (ejecutar una sola vez)
-  async initSheets() {
-    return request(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'init' }),
-    })
-  },
+  // ── Init ──────────────────────────────────────────────────
+  init: () => post({ action: 'init' }),
 }
