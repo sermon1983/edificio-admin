@@ -12,6 +12,7 @@ import Incidentes from './pages/Incidentes.jsx'
 import OrdenesTrabajos from './pages/OrdenesTrabajos.jsx'
 import Mantenedor from './pages/Mantenedor.jsx'
 import './App.css'
+import { ErrorBoundary } from './components/ErrorBoundary.jsx'
 
 function ProtectedRoute({ children, superadminOnly }) {
   const { user } = useAuth()
@@ -38,7 +39,7 @@ function AppShell() {
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)}/>
       <div className="app-main">
         <Header onMenuClick={() => setMobileOpen(o => !o)}/>
-        <main className="app-content">
+        <main className="app-content"><ErrorBoundary>
           <Routes>
             <Route path="/"            element={<ProtectedRoute><Dashboard/></ProtectedRoute>}/>
             <Route path="/gastos"      element={<ProtectedRoute><GastosComunes/></ProtectedRoute>}/>
@@ -50,7 +51,7 @@ function AppShell() {
             <Route path="/login"       element={<Navigate to="/" replace/>}/>
             <Route path="*"            element={<Navigate to="/" replace/>}/>
           </Routes>
-        </main>
+        </ErrorBoundary></main>
       </div>
     </div>
   )
