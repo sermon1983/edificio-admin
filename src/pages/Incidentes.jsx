@@ -348,8 +348,10 @@ export default function Incidentes() {
                   <input className="form-control" value={form.reportado_por} onChange={e=>setForm(f=>({...f,reportado_por:e.target.value}))} placeholder="Depto / Persona"/>
                 </div>
                 <div className="form-group">
-                  <label>Fecha</label>
-                  <input className="form-control" type="date" value={form.fecha} onChange={e=>setForm(f=>({...f,fecha:e.target.value}))}/>
+                  <label>Fecha de creación</label>
+                  <div style={{ padding:'9px 13px', background:'var(--bg-deep)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-md)', color:'var(--text-muted)', fontSize:14, fontFamily:'var(--font-mono)' }}>
+                    📅 {form.fecha}
+                  </div>
                 </div>
                 <div className="form-group" style={{ gridColumn:'span 2' }}>
                   <label>Descripción</label>

@@ -26,7 +26,7 @@ const EVENTOS_NOTIF = [
 
 const EMPTY_ED = { nombre:'', direccion:'', unidades:'', color:'#1B98E0', activo:'true', tipo:'edificio', modulos:'gastos,consumos,rondas,incidentes,ordenes,recaudacion' }
 const EMPTY_US = { nombre:'', email:'', password:'', rol:'admin', edificios_ids:'' }
-const EMPTY_NF = { edificio_id:'', nombre:'', evento:'todos', emails:'', activo:'true' }
+const EMPTY_NF = { edificio_id:'', nombre:'', evento:'todos', emails:'', activo:'true', from_name:'AdminEdificio', reply_to:'' }
 
 function normIds(val) { return !val && val !== 0 ? '' : String(val).trim() }
 function splitIds(val) { return normIds(val).split(',').map(s=>s.trim()).filter(Boolean) }
@@ -120,7 +120,7 @@ export default function Mantenedor() {
 
   // ── Notificaciones ────────────────────────────────────────────
   function openNewNf()   { setEditNf(null); setFormNf(EMPTY_NF); setModalNf(true) }
-  function openEditNf(n) { setEditNf(n); setFormNf({ edificio_id:String(n.edificio_id||''), nombre:String(n.nombre||''), evento:String(n.evento||'todos'), emails:String(n.emails||''), activo:String(n.activo||'true') }); setModalNf(true) }
+  function openEditNf(n) { setEditNf(n); setFormNf({ edificio_id:String(n.edificio_id||''), nombre:String(n.nombre||''), evento:String(n.evento||'todos'), emails:String(n.emails||''), activo:String(n.activo||'true'), from_name:String(n.from_name||'AdminEdificio'), reply_to:String(n.reply_to||'') }); setModalNf(true) }
 
   async function saveNf() {
     if(!formNf.emails||!formNf.edificio_id) return
