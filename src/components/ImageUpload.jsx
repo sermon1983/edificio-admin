@@ -14,7 +14,11 @@ const TIMEOUT_MS = 12000
 export function parseImages(value) {
   if (!value || !String(value).trim()) return []
   const s = String(value).trim()
+  // Formato nuevo: múltiples imágenes separadas por |||
   if (s.includes(SEP)) return s.split(SEP).filter(Boolean)
+  // Data URI única (contiene comas pero NO debe dividirse)
+  if (s.startsWith('data:')) return [s]
+  // Formato antiguo: URLs de Drive separadas por coma
   return s.split(',').map(x => x.trim()).filter(Boolean)
 }
 
