@@ -3,12 +3,16 @@ import { api } from '../api.js'
 
 const AuthContext = createContext(null)
 
-const ALL_MODULES = ['gastos','consumos','rondas','incidentes','ordenes','recaudacion']
+const ALL_MODULES  = ['gastos','consumos','rondas','incidentes','ordenes','recaudacion']
+export const ALL_WIDGETS = [
+  'card_gastos','card_recaudacion','card_incidentes','card_ordenes',
+  'chart_gastos','chart_incidentes','list_cobranzas','list_rondas'
+]
 
-function parseModules(modulos) {
-  if (!modulos) return ALL_MODULES
-  const list = String(modulos).split(',').map(s => s.trim()).filter(Boolean)
-  return list.length > 0 ? list : ALL_MODULES
+function parseList(val, defaults) {
+  if (!val || !String(val).trim()) return defaults
+  const list = String(val).split(',').map(s => s.trim()).filter(Boolean)
+  return list.length > 0 ? list : defaults
 }
 
 export function AuthProvider({ children }) {
@@ -17,7 +21,8 @@ export function AuthProvider({ children }) {
   const [edificios, setEdificios] = useState(() => { try { return JSON.parse(localStorage.getItem('ae_edificios')) || [] } catch { return [] } })
   const [building,  setBuilding]  = useState(() => { try { return JSON.parse(localStorage.getItem('ae_building')) } catch { return null } })
 
-  const activeModules = building ? parseModules(building.modulos) : ALL_MODULES
+  const activeModules   = building ? parseList(building.modulos,          ALL_MODULES) : ALL_MODULES
+  const dashboardWidgets = building ? parseList(building.dashboard_widgets, ALL_WIDGETS) : ALL_WIDGETS
 
   const login = useCallback(async (email, password) => {
     const result = await api.login(email, password)
@@ -47,7 +52,6 @@ export function AuthProvider({ children }) {
     const list = await api.getEdificios(token)
     setEdificios(list)
     localStorage.setItem('ae_edificios', JSON.stringify(list))
-    // Refresh current building data
     if (building) {
       const updated = list.find(e => String(e.id) === String(building.id))
       if (updated) { setBuilding(updated); localStorage.setItem('ae_building', JSON.stringify(updated)) }
@@ -56,7 +60,7 @@ export function AuthProvider({ children }) {
   }, [token, building])
 
   return (
-    <AuthContext.Provider value={{ user, token, edificios, building, activeModules, login, logout, selectBuilding, refreshEdificios }}>
+    <AuthContext.Provider value={{ user, token, edificios, building, activeModules, dashboardWidgets, login, logout, selectBuilding, refreshEdificios }}>
       {children}
     </AuthContext.Provider>
   )
