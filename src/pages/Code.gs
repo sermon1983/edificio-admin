@@ -8,7 +8,7 @@ var HEADERS = {
   edificios:    ['id','nombre','direccion','unidades','color','activo','tipo','modulos'],
   usuarios:     ['id','nombre','email','password_hash','rol','edificios_ids'],
   sesiones:     ['token','user_id','expiry'],
-  notif_config: ['id','edificio_id','nombre','evento','emails','activo'],
+  notif_config: ['id','edificio_id','nombre','evento','emails','activo','from_name','reply_to'],
   gastos:       ['id','concepto','monto','fecha','categoria','estado','proveedor'],
   consumos:     ['id','tipo','unidad','lectura_anterior','lectura_actual','mes','costo_unitario','estado'],
   rondas:       ['id','guardia','inicio','fin','zonas','novedades','estado','imagenes'],
@@ -279,9 +279,15 @@ function sendIncidentEmail(edificioId, evento, incidente, actor) {
     '</div></div>'
 
   configs.forEach(function(config) {
-    var emails = String(config.emails||'').split(',').map(function(e){return e.trim()}).filter(Boolean)
+    var emails   = String(config.emails||'').split(',').map(function(e){return e.trim()}).filter(Boolean)
+    var fromName = String(config.from_name||'AdminEdificio')
+    var replyTo  = String(config.reply_to||'')
     emails.forEach(function(email) {
-      try { MailApp.sendEmail({ to:email, subject:asunto, htmlBody:html }) } catch(ex) { Logger.log('MailApp error: '+ex) }
+      try {
+        var opts = { to:email, subject:asunto, htmlBody:html, name:fromName }
+        if(replyTo) opts.replyTo = replyTo
+        MailApp.sendEmail(opts)
+      } catch(ex) { Logger.log('MailApp error: '+ex) }
     })
   })
 }
@@ -410,7 +416,19 @@ function createDataRow(fullSheetName, baseName, data) {
 
 function updateRow(sheetName, id, data) {
   var ss=getSpreadsheet(); var sheet=ss.getSheetByName(sheetName); if(!sheet) return
-  var all=sheet.getDataRange().getValues(); var headers=all[0]
+  var all=sheet.getDataRange().getValues(); var headers=all[0].slice()
+
+  // Agrega columnas faltantes dinámicamente (ej: modulos, fecha_cierre)
+  for(var key in data){
+    if(!data.hasOwnProperty(key)||key==='id') continue
+    if(headers.indexOf(key)===-1){
+      var newCol=headers.length+1
+      var hCell=sheet.getRange(1,newCol)
+      hCell.setValue(key); hCell.setBackground('#0F4C75'); hCell.setFontColor('#FFFFFF'); hCell.setFontWeight('bold')
+      headers.push(key)
+      Logger.log('Columna agregada: '+key+' en '+sheetName)
+    }
+  }
   for(var i=1;i<all.length;i++){
     if(Number(all[i][0])===id){
       for(var j=0;j<headers.length;j++){if(data[headers[j]]!==undefined)sheet.getRange(i+1,j+1).setValue(data[headers[j]])}
@@ -472,3 +490,134 @@ function styleHeader(sheet,cols){
 
 function jsonOk(data){return ContentService.createTextOutput(JSON.stringify({ok:true,data:data})).setMimeType(ContentService.MimeType.JSON)}
 function jsonError(msg){return ContentService.createTextOutput(JSON.stringify({ok:false,error:msg})).setMimeType(ContentService.MimeType.JSON)}
+
+// ════════════════════════════════════════════════════════════
+//  VERIFICACIÓN DE INCIDENTES VENCIDOS — trigger diario
+// ════════════════════════════════════════════════════════════
+
+var DIAS_PRIORIDAD = { 'Crítica':5, 'Alta':10, 'Media':20, 'Baja':30 }
+
+/**
+ * Ejecutar manualmente UNA VEZ para autorizar DriveApp.
+ * Luego puedes subir imágenes desde la app.
+ */
+function testDriveSetup() {
+  var folder = getImagesFolder()
+  Logger.log('✅ DriveApp autorizado. Carpeta: ' + folder.getName())
+  Logger.log('🔗 URL: ' + folder.getUrl())
+}
+
+/**
+ * Revisa todos los edificios buscando incidentes vencidos
+ * y envía notificaciones por email.
+ * Configurar como trigger: Tiempo → Cada día → 9:00am
+ */
+function checkExpiredIncidents() {
+  var ss        = getSpreadsheet()
+  var edificios = getSheetRows('edificios')
+  var configs   = getSheetRows('notif_config').filter(function(c){ return String(c.activo)==='true' })
+  var hoy       = new Date(); hoy.setHours(0,0,0,0)
+  var manana    = new Date(hoy.getTime()+86400000)
+  var resumen   = []
+
+  Logger.log('=== checkExpiredIncidents: ' + Utilities.formatDate(hoy, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + ' ===')
+
+  for(var e=0; e<edificios.length; e++){
+    var edif = edificios[e]
+    var sheetName = 'incidentes_' + edif.id
+    var sheet = ss.getSheetByName(sheetName)
+    if(!sheet) continue
+
+    var incidentes = getSheetRows(sheetName).filter(function(i){
+      return i.estado !== 'Resuelto' && i.estado !== 'Cerrado' && i.fecha
+    })
+
+    for(var i=0; i<incidentes.length; i++){
+      var inc  = incidentes[i]
+      var dias = DIAS_PRIORIDAD[inc.prioridad] || 30
+      var inicio  = new Date(inc.fecha); inicio.setHours(0,0,0,0)
+      var limite  = new Date(inicio.getTime() + dias*86400000)
+      var restantes = Math.round((limite - hoy) / 86400000)
+
+      var tipo_alerta = null
+      if(restantes < 0)           tipo_alerta = 'vencido'     // ya venció
+      else if(restantes === 0)    tipo_alerta = 'vence_hoy'   // vence hoy
+      else if(restantes === 1)    tipo_alerta = 'vence_manana' // vence mañana
+
+      if(!tipo_alerta) continue
+
+      // Construir y enviar emails para este edificio
+      var cfgList = configs.filter(function(c){
+        return String(c.edificio_id)===String(edif.id) &&
+               (c.evento==='todos' || c.evento==='incidente_creado' || c.evento==='incidente_actualizado')
+      })
+      if(!cfgList.length) continue
+
+      var tz       = Session.getScriptTimeZone()
+      var fechaLimStr = Utilities.formatDate(limite, tz, 'dd/MM/yyyy')
+      var colorPrio   = { 'Crítica':'#dc2626','Alta':'#ea580c','Media':'#d97706','Baja':'#16a34a' }
+      var color       = colorPrio[inc.prioridad]||'#1B98E0'
+      var alertaTexto = tipo_alerta==='vencido' ? '⚠️ INCIDENTE VENCIDO' : tipo_alerta==='vence_hoy' ? '🔔 VENCE HOY' : '⏰ VENCE MAÑANA'
+      var asunto      = alertaTexto + ': ' + inc.titulo + ' — ' + edif.nombre
+
+      var html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8f9fa;padding:20px;">' +
+        '<div style="background:'+color+';color:white;padding:20px 24px;border-radius:8px 8px 0 0;">' +
+        '<h2 style="margin:0;font-size:20px;">'+alertaTexto+'</h2>' +
+        '<p style="margin:4px 0 0;opacity:0.9;font-size:13px;">' + edif.nombre + '</p></div>' +
+        '<div style="background:white;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+        '<tr><td style="padding:8px 0;color:#666;width:130px;">Título</td><td style="padding:8px 0;font-weight:600;">'+(inc.titulo||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Tipo</td><td style="padding:8px 0;">'+(inc.tipo||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Prioridad</td><td style="padding:8px 0;"><span style="background:'+color+';color:white;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;">'+(inc.prioridad||'')+'</span></td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Estado</td><td style="padding:8px 0;">'+(inc.estado||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Reportado por</td><td style="padding:8px 0;">'+(inc.reportado_por||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Fecha creación</td><td style="padding:8px 0;">'+(inc.fecha||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Fecha límite</td><td style="padding:8px 0;font-weight:700;color:'+color+';">'+fechaLimStr+' ('+dias+' días)</td></tr>' +
+        (restantes<0?'<tr><td style="padding:8px 0;color:#dc2626;font-weight:700;" colspan="2">⚠️ Venció hace '+Math.abs(restantes)+' días — Requiere atención inmediata</td></tr>':'') +
+        '</table>' +
+        (inc.descripcion?'<div style="margin-top:16px;padding:12px;background:#f3f4f6;border-radius:6px;font-size:13px;"><b>Descripción:</b><br>'+inc.descripcion+'</div>':'') +
+        '</div></div>'
+
+      cfgList.forEach(function(cfg){
+        var emails   = String(cfg.emails||'').split(',').map(function(em){return em.trim()}).filter(Boolean)
+        var fromName = String(cfg.from_name||'AdminEdificio')
+        var replyTo  = String(cfg.reply_to||'')
+        emails.forEach(function(email){
+          try {
+            var opts = { to:email, subject:asunto, htmlBody:html, name:fromName }
+            if(replyTo) opts.replyTo = replyTo
+            MailApp.sendEmail(opts)
+            Logger.log('Email enviado a: '+email+' | '+asunto)
+          } catch(ex){ Logger.log('Error email: '+ex) }
+        })
+      })
+
+      resumen.push(edif.nombre + ' | ' + inc.titulo + ' | ' + tipo_alerta)
+    }
+  }
+
+  Logger.log('=== Resumen: ' + resumen.length + ' alertas enviadas ===')
+  if(resumen.length) resumen.forEach(function(r){ Logger.log('  - '+r) })
+  return resumen.length
+}
+
+/**
+ * Crea el trigger automático diario para checkExpiredIncidents.
+ * Ejecutar UNA SOLA VEZ desde el editor de Apps Script.
+ */
+function crearTriggerDiario() {
+  // Eliminar triggers existentes de esta función
+  var triggers = ScriptApp.getProjectTriggers()
+  for(var i=0; i<triggers.length; i++){
+    if(triggers[i].getHandlerFunction()==='checkExpiredIncidents'){
+      ScriptApp.deleteTrigger(triggers[i])
+    }
+  }
+  // Crear nuevo trigger diario a las 9am
+  ScriptApp.newTrigger('checkExpiredIncidents')
+    .timeBased()
+    .everyDays(1)
+    .atHour(9)
+    .create()
+  Logger.log('✅ Trigger diario creado: checkExpiredIncidents se ejecutará cada día a las 9am')
+}
