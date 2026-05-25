@@ -61,4 +61,14 @@ export const api = {
   // ── Imágenes ──────────────────────────────────────────────
   uploadImage: (token, base64, mimeType, filename) =>
     post({ action: 'uploadImage', token, base64, mimeType, filename }),
+
+  // ── Notificaciones config ─────────────────────────────────
+  getNotifConfig: (token) =>
+    request(`${SCRIPT_URL}?action=getNotifConfig&token=${token}`),
+  createNotifConfig: (token, data) =>
+    post({ action: 'createNotifConfig', token, data }),
+  updateNotifConfig: (token, id, data) =>
+    post({ action: 'updateNotifConfig', token, id, data }),
+  deleteNotifConfig: (token, id) =>
+    post({ action: 'deleteNotifConfig', token, id }),
 }

@@ -4,20 +4,23 @@ import { LayoutDashboard, Receipt, Droplets, Shield, AlertTriangle, Wrench, Buil
 import { useAuth } from '../context/AuthContext.jsx'
 import './Sidebar.css'
 
-const NAV = [
-  { to:'/',            icon:LayoutDashboard, label:'Dashboard'          },
-  { to:'/gastos',      icon:Receipt,         label:'Gastos Comunes'     },
-  { to:'/consumos',    icon:Droplets,        label:'Consumos'           },
-  { to:'/recaudacion', icon:DollarSign,      label:'Recaudación GGCC'   },
-  { to:'/rondas',      icon:Shield,          label:'Rondas de Seguridad'},
-  { to:'/incidentes',  icon:AlertTriangle,   label:'Incidentes'         },
-  { to:'/ordenes',     icon:Wrench,          label:'Órdenes de Trabajo' },
+const ALL_NAV = [
+  { to:'/',            icon:LayoutDashboard, label:'Dashboard',           module: null          },
+  { to:'/gastos',      icon:Receipt,         label:'Gastos Comunes',      module:'gastos'        },
+  { to:'/consumos',    icon:Droplets,        label:'Consumos',            module:'consumos'      },
+  { to:'/recaudacion', icon:DollarSign,      label:'Recaudación GGCC',    module:'recaudacion'   },
+  { to:'/rondas',      icon:Shield,          label:'Rondas de Seguridad', module:'rondas'        },
+  { to:'/incidentes',  icon:AlertTriangle,   label:'Incidentes',          module:'incidentes'    },
+  { to:'/ordenes',     icon:Wrench,          label:'Órdenes de Trabajo',  module:'ordenes'       },
 ]
 
 export default function Sidebar({ mobileOpen, onClose }) {
   const [collapsed, setCollapsed] = useState(false)
-  const { user, building } = useAuth()
+  const { user, building, activeModules } = useAuth()
   const isSuperadmin = user?.rol === 'superadmin'
+
+  // Filtra los items según módulos activos del edificio
+  const nav = ALL_NAV.filter(item => !item.module || activeModules.includes(item.module))
 
   return (
     <>
@@ -28,14 +31,14 @@ export default function Sidebar({ mobileOpen, onClose }) {
           {!collapsed && (
             <div className="brand-text">
               <span className="brand-name">AdminEdificio</span>
-              <span className="brand-sub">{building?.nombre||'Sin edificio'}</span>
+              <span className="brand-sub">{building?.nombre || 'Sin edificio'}</span>
             </div>
           )}
           <button className="sidebar-close-mobile" onClick={onClose}><X size={16}/></button>
         </div>
 
         <nav className="sidebar-nav">
-          {NAV.map(({ to, icon: Icon, label }) => (
+          {nav.map(({ to, icon: Icon, label }) => (
             <NavLink key={to} to={to} end={to==='/'} className={({ isActive })=>`nav-item ${isActive?'active':''}`} onClick={onClose}>
               <Icon size={18}/>{!collapsed && <span>{label}</span>}
             </NavLink>

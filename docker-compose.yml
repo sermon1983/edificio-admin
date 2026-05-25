@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  edificio-admin:
+    build:
+      context: .
+      args:
+        # Lee la variable desde el archivo .env en la misma carpeta
+        VITE_SCRIPT_URL: ${VITE_SCRIPT_URL}
+    image: edificio-admin:latest
+    container_name: edificio-admin
+    ports:
+      # Puerto externo:puerto interno
+      # Cambia 8080 al puerto que quieras usar
+      - "8080:80"
+    restart: unless-stopped
+
+# Para usar:
+#   1. Crea un archivo .env con: VITE_SCRIPT_URL=https://script.google.com/...
+#   2. Ejecuta: docker compose up -d --build
+#   3. Abre: http://localhost:8080
+#      O desde otro dispositivo en tu red: http://IP-DE-TU-PC:8080
