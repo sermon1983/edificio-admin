@@ -1,162 +1,146 @@
+/**
+ * ImageUpload v3 — compresión 100% local, sin API, sin Drive
+ * Identificador de versión: IMG_UPLOAD_V3
+ */
 import React, { useRef, useState } from 'react'
-import { X, ImagePlus, AlertCircle, ZoomIn } from 'lucide-react'
+import { X, Camera, AlertCircle } from 'lucide-react'
 
-const MAX_PX   = 250    // tamaño máximo en px
-const QUALITY  = 0.45   // calidad JPEG (produce ~6-8KB por imagen)
-const MAX_IMGS = 3      // máximo de imágenes por registro
-
-// Separador seguro (base64 nunca contiene "|||")
+const MAX_PX  = 240
+const QUALITY = 0.45
+const MAX_IMGS = 3
 const SEP = '|||'
+const TIMEOUT_MS = 12000
 
-// Comprime imagen a data URI sin llamadas a API
-function compressToDataUri(file) {
+export function parseImages(value) {
+  if (!value || !String(value).trim()) return []
+  const s = String(value).trim()
+  if (s.includes(SEP)) return s.split(SEP).filter(Boolean)
+  return s.split(',').map(x => x.trim()).filter(Boolean)
+}
+
+function compress(file) {
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('Solo se permiten archivos de imagen')); return
-    }
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('No se pudo leer el archivo'))
-    reader.onload = (e) => {
-      const img = new Image()
-      img.onerror = () => reject(new Error('Imagen no válida'))
-      img.onload = () => {
-        let w = img.width, h = img.height
-        if (w === 0 || h === 0) { reject(new Error('Imagen vacía')); return }
-        // Redimensionar manteniendo proporción
-        if (w > MAX_PX || h > MAX_PX) {
-          if (w > h) { h = Math.round((h * MAX_PX) / w); w = MAX_PX }
-          else       { w = Math.round((w * MAX_PX) / h); h = MAX_PX }
-        }
-        const canvas = document.createElement('canvas')
-        canvas.width = w; canvas.height = h
-        const ctx = canvas.getContext('2d')
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, w, h)
-        ctx.drawImage(img, 0, 0, w, h)
-        const dataUri = canvas.toDataURL('image/jpeg', QUALITY)
-        if (!dataUri || dataUri === 'data:,') { reject(new Error('Error al comprimir')); return }
-        resolve(dataUri)
+    const tid = setTimeout(() => reject(new Error('Tiempo agotado')), TIMEOUT_MS)
+    const done = (v) => { clearTimeout(tid); resolve(v) }
+    const fail = (e) => { clearTimeout(tid); reject(e instanceof Error ? e : new Error(String(e))) }
+
+    try {
+      const fr = new FileReader()
+      fr.onerror = () => fail(new Error('Error al leer el archivo'))
+      fr.onload = (ev) => {
+        try {
+          const img = new Image()
+          img.onerror = () => fail(new Error('Formato de imagen no soportado'))
+          img.onload = () => {
+            try {
+              let w = img.naturalWidth || img.width
+              let h = img.naturalHeight || img.height
+              if (!w || !h) { fail(new Error('Imagen vacía')); return }
+              if (w > MAX_PX || h > MAX_PX) {
+                if (w >= h) { h = Math.round(h * MAX_PX / w); w = MAX_PX }
+                else        { w = Math.round(w * MAX_PX / h); h = MAX_PX }
+              }
+              const c = document.createElement('canvas')
+              c.width = w; c.height = h
+              const ctx = c.getContext('2d')
+              ctx.fillStyle = '#fff'
+              ctx.fillRect(0, 0, w, h)
+              ctx.drawImage(img, 0, 0, w, h)
+              const uri = c.toDataURL('image/jpeg', QUALITY)
+              if (!uri || uri.length < 50) { fail(new Error('No se pudo comprimir')); return }
+              done(uri)
+            } catch(e) { fail(e) }
+          }
+          img.src = ev.target.result
+        } catch(e) { fail(e) }
       }
-      img.src = e.target.result
-    }
-    reader.readAsDataURL(file)
+      fr.readAsDataURL(file)
+    } catch(e) { fail(e) }
   })
 }
 
-// Parsea imágenes desde el valor almacenado (soporta "|||" y "," para retrocompatibilidad)
-export function parseImages(value) {
-  if (!value || !String(value).trim()) return []
-  const str = String(value).trim()
-  // Nuevo formato con base64 (separador |||)
-  if (str.includes(SEP)) return str.split(SEP).map(s=>s.trim()).filter(Boolean)
-  // Formato antiguo con URLs de Drive (separador ,)
-  return str.split(',').map(s=>s.trim()).filter(Boolean)
-}
-
-// Componente de miniatura con zoom
 function Thumb({ src, onRemove }) {
   const [zoom, setZoom] = useState(false)
   return (
     <>
-      <div style={{ position:'relative', width:72, height:72, flexShrink:0 }}>
-        <img src={src} alt="" onClick={() => setZoom(true)}
-          style={{ width:72, height:72, objectFit:'cover', borderRadius:8, border:'1px solid var(--border-main)', cursor:'zoom-in', display:'block' }}
-          onError={e=>{ e.target.style.opacity='0.3' }} />
+      <div style={{ position:'relative', width:70, height:70 }}>
+        <img src={src} alt="foto" onClick={() => setZoom(true)}
+          style={{ width:70, height:70, objectFit:'cover', borderRadius:8, border:'1px solid var(--border-main)', cursor:'pointer', display:'block' }}/>
         {onRemove && (
-          <button onClick={onRemove} style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:'50%', background:'var(--red)', border:'2px solid var(--bg-surface)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>
-            <X size={10} color="white"/>
+          <button onClick={onRemove} type="button"
+            style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:'50%', background:'#ef4444', border:'2px solid var(--bg-surface)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', padding:0 }}>
+            <X size={11} color="white"/>
           </button>
         )}
       </div>
       {zoom && (
-        <div onClick={() => setZoom(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, cursor:'zoom-out', padding:20 }}>
-          <img src={src} alt="" style={{ maxWidth:'90vw', maxHeight:'90vh', objectFit:'contain', borderRadius:12 }}/>
+        <div onClick={() => setZoom(false)}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.88)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', cursor:'zoom-out', padding:20 }}>
+          <img src={src} style={{ maxWidth:'92vw', maxHeight:'92vh', objectFit:'contain', borderRadius:10 }}/>
         </div>
       )}
     </>
   )
 }
 
-export default function ImageUpload({ value = '', onChange, label = 'Adjuntar imágenes', readOnly = false }) {
-  const inputRef   = useRef(null)
-  const [loading,  setLoading]  = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [error,    setError]    = useState(null)
+export default function ImageUpload({ value = '', onChange, label = 'Adjuntar fotos', readOnly = false }) {
+  const ref = useRef(null)
+  const [busy,  setBusy]  = useState(false)
+  const [step,  setStep]  = useState('')
+  const [err,   setErr]   = useState(null)
 
-  const images = parseImages(value)
+  const imgs  = parseImages(value)
+  const canAdd = MAX_IMGS - imgs.length
 
-  async function handleFiles(files) {
-    if (!files?.length) return
-    const canAdd = MAX_IMGS - images.length
-    if (canAdd <= 0) { setError(`Máximo ${MAX_IMGS} imágenes por registro`); return }
-    setLoading(true); setError(null); setProgress(0)
+  async function pick(e) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!files.length) return
+    if (canAdd <= 0) { setErr(`Máximo ${MAX_IMGS} fotos`); return }
+
+    setBusy(true); setErr(null)
+    const results = []
     try {
-      const toProcess = Array.from(files).slice(0, canAdd)
-      const newUris   = []
-      for (let i = 0; i < toProcess.length; i++) {
-        setProgress(Math.round(((i) / toProcess.length) * 100))
-        const uri = await compressToDataUri(toProcess[i])
-        newUris.push(uri)
+      const batch = files.slice(0, canAdd)
+      for (let i = 0; i < batch.length; i++) {
+        setStep(`Comprimiendo ${i + 1} de ${batch.length}...`)
+        results.push(await compress(batch[i]))
       }
-      setProgress(100)
-      onChange([...images, ...newUris].join(SEP))
-    } catch(e) {
-      setError(e.message || 'Error al procesar imagen')
+      onChange([...imgs, ...results].join(SEP))
+    } catch (ex) {
+      setErr(ex.message)
     } finally {
-      setLoading(false); setProgress(0)
+      setBusy(false); setStep('')
     }
   }
 
-  function remove(idx) {
-    onChange(images.filter((_,i) => i !== idx).join(SEP))
-  }
-
-  if (readOnly && images.length === 0) return null
+  if (readOnly && imgs.length === 0) return null
 
   return (
     <div>
-      {/* Miniaturas */}
-      {images.length > 0 && (
+      {imgs.length > 0 && (
         <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
-          {images.map((src, i) => (
-            <Thumb key={i} src={src} onRemove={readOnly ? null : () => remove(i)} />
-          ))}
+          {imgs.map((s, i) => <Thumb key={i} src={s} onRemove={readOnly ? null : () => onChange(imgs.filter((_,j)=>j!==i).join(SEP))}/>)}
         </div>
       )}
 
-      {/* Botón de carga (solo en modo edición) */}
-      {!readOnly && images.length < MAX_IMGS && (
-        <button type="button"
-          onClick={() => { setError(null); inputRef.current?.click() }}
-          disabled={loading}
-          style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 14px', borderRadius:'var(--radius-md)', background:'var(--bg-elevated)', border:'1px dashed var(--border-main)', color: loading ? 'var(--accent-text)' : 'var(--text-muted)', cursor: loading ? 'default' : 'pointer', fontSize:13, fontFamily:'var(--font-sans)', transition:'border-color 0.15s', width:'100%', justifyContent:'center' }}
-          onMouseEnter={e => { if(!loading) e.currentTarget.style.borderColor='var(--accent)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border-main)' }}
-        >
-          {loading ? (
-            <><span className="spinner" style={{ width:15, height:15, borderWidth:2 }}/>
-              Procesando{progress > 0 ? ` ${progress}%` : '...'}
-            </>
-          ) : (
-            <><ImagePlus size={15}/> {label} ({images.length}/{MAX_IMGS})</>
-          )}
+      {!readOnly && canAdd > 0 && (
+        <button type="button" disabled={busy}
+          onClick={() => { setErr(null); ref.current?.click() }}
+          style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:8, padding:'10px 14px', borderRadius:8, background:'var(--bg-elevated)', border:'1px dashed var(--border-main)', color: busy ? 'var(--accent-text)' : 'var(--text-muted)', cursor: busy ? 'default' : 'pointer', fontSize:13, fontFamily:'var(--font-sans)' }}>
+          {busy
+            ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }}/> {step || 'Comprimiendo...'}</>
+            : <><Camera size={15}/> {label} ({imgs.length}/{MAX_IMGS})</>}
         </button>
       )}
 
-      <input ref={inputRef} type="file" accept="image/*" multiple style={{ display:'none' }}
-        onChange={e => { handleFiles(e.target.files); e.target.value='' }} />
+      <input ref={ref} type="file" accept="image/*" multiple style={{ display:'none' }} onChange={pick}/>
 
-      {error && (
-        <div style={{ display:'flex', alignItems:'flex-start', gap:7, background:'var(--red-soft)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:'var(--radius-md)', padding:'9px 12px', marginTop:8 }}>
-          <AlertCircle size={14} color="var(--red)" style={{ flexShrink:0, marginTop:1 }}/>
-          <p style={{ color:'var(--red)', fontSize:12.5, lineHeight:1.5, margin:0 }}>{error}</p>
+      {err && (
+        <div style={{ display:'flex', gap:7, alignItems:'flex-start', padding:'8px 12px', marginTop:8, background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:8 }}>
+          <AlertCircle size={14} color="#ef4444" style={{ marginTop:1, flexShrink:0 }}/>
+          <span style={{ fontSize:12.5, color:'#ef4444' }}>{err}</span>
         </div>
-      )}
-
-      {!readOnly && (
-        <p style={{ fontSize:11, color:'var(--text-dim)', marginTop:6 }}>
-          Imágenes se comprimen automáticamente · Máx {MAX_IMGS} por registro · Sin límite de tamaño
-        </p>
       )}
     </div>
   )
