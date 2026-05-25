@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, X, Wrench, Trash2, Search, Calendar, CheckCircle } from 'lucide-react'
-import ImageUpload from '../components/ImageUpload.jsx'
+import ImageUpload, { parseImages } from '../components/ImageUpload.jsx'
 import { useSheetData } from '../hooks/useSheetData.js'
 import { LoadingState, ErrorState } from '../components/LoadingState.jsx'
 
@@ -195,9 +195,9 @@ function OrdCard({ o, prioColor, onDel, onEstado }) {
           <Calendar size={11}/> {o.fecha_limite}
         </p>
       )}
-      {o.imagenes && String(o.imagenes).trim() && (
+      {parseImages(o.imagenes).length > 0 && (
         <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:8 }}>
-          {String(o.imagenes).split(',').filter(Boolean).map((url,i)=>(
+          {parseImages(o.imagenes).map((url,i)=>(
             <img key={i} src={url.trim()} alt="" onClick={()=>window.open(url.trim(),'_blank')} style={{ width:52, height:52, objectFit:'cover', borderRadius:6, border:'1px solid var(--border-main)', cursor:'pointer' }}/>
           ))}
         </div>

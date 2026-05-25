@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, X, Trash2, Edit2, Building2, Users, Check, Bell, Layout } from 'lucide-react'
+import { Plus, X, Trash2, Edit2, Building2, Users, Check, Bell, LayoutDashboard } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
+import { ALL_WIDGETS } from '../context/AuthContext.jsx'
 import { api } from '../api.js'
 import { LoadingState, ErrorState } from '../components/LoadingState.jsx'
 import { ErrorBoundary } from '../components/ErrorBoundary.jsx'
@@ -24,7 +25,24 @@ const EVENTOS_NOTIF = [
   { id:'incidente_actualizado',label:'Incidente actualizado / comentado'},
 ]
 
-const EMPTY_ED = { nombre:'', direccion:'', unidades:'', color:'#1B98E0', activo:'true', tipo:'edificio', modulos:'gastos,consumos,rondas,incidentes,ordenes,recaudacion' }
+const DASHBOARD_WIDGETS_LISTA = [
+  { group: 'Indicadores KPI', items: [
+    { id:'card_gastos',      label:'Tarjeta: Gastos del Período'    },
+    { id:'card_recaudacion', label:'Tarjeta: GGCC Recaudado'        },
+    { id:'card_incidentes',  label:'Tarjeta: Incidentes Activos'    },
+    { id:'card_ordenes',     label:'Tarjeta: Órdenes Pendientes'    },
+  ]},
+  { group: 'Gráficos', items: [
+    { id:'chart_gastos',     label:'Gráfico: Gastos por Categoría'  },
+    { id:'chart_incidentes', label:'Gráfico: Incidentes por Tipo'   },
+  ]},
+  { group: 'Listas', items: [
+    { id:'list_cobranzas',   label:'Lista: Cobranzas Recientes'     },
+    { id:'list_rondas',      label:'Lista: Rondas Recientes'        },
+  ]},
+]
+
+const EMPTY_ED = { nombre:'', direccion:'', unidades:'', color:'#1B98E0', activo:'true', tipo:'edificio', modulos:'gastos,consumos,rondas,incidentes,ordenes,recaudacion', dashboard_widgets: ALL_WIDGETS.join(',') }
 const EMPTY_US = { nombre:'', email:'', password:'', rol:'admin', edificios_ids:'' }
 const EMPTY_NF = { edificio_id:'', nombre:'', evento:'todos', emails:'', activo:'true', from_name:'AdminEdificio', reply_to:'' }
 
@@ -34,6 +52,7 @@ function splitIds(val) { return normIds(val).split(',').map(s=>s.trim()).filter(
 export default function Mantenedor() {
   const { token, refreshEdificios } = useAuth()
   const [tab, setTab] = useState('edificios')
+  const [dashEdificio, setDashEdificio] = useState('')
 
   const [edificios,  setEdificios]  = useState([])
   const [loadingEd,  setLoadingEd]  = useState(true)
@@ -72,7 +91,8 @@ export default function Mantenedor() {
   function openEditEd(e) {
     setEditEd(e)
     const mods = normIds(e.modulos) || 'gastos,consumos,rondas,incidentes,ordenes,recaudacion'
-    setFormEd({ nombre:String(e.nombre||''), direccion:String(e.direccion||''), unidades:String(e.unidades||''), color:String(e.color||'#1B98E0'), activo:String(e.activo||'true'), tipo:String(e.tipo||'edificio'), modulos:mods })
+    const dw = String(e.dashboard_widgets || ALL_WIDGETS.join(','))
+    setFormEd({ nombre:String(e.nombre||''), direccion:String(e.direccion||''), unidades:String(e.unidades||''), color:String(e.color||'#1B98E0'), activo:String(e.activo||'true'), tipo:String(e.tipo||'edificio'), modulos:mods, dashboard_widgets: dw })
     setModalEd(true)
   }
 
@@ -95,6 +115,22 @@ export default function Mantenedor() {
     const list = splitIds(formEd.modulos)
     const next = list.includes(mod) ? list.filter(m=>m!==mod) : [...list,mod]
     setFormEd(f=>({...f, modulos:next.join(',')}))
+  }
+
+  function toggleWidget(wid, edId) {
+    // edId: building id being edited in dashboard tab
+    const ed = edificios.find(e => String(e.id) === String(edId))
+    if (!ed) return
+    const current = String(ed.dashboard_widgets || ALL_WIDGETS.join(','))
+    const list = current.split(',').map(s=>s.trim()).filter(Boolean)
+    const next = list.includes(wid) ? list.filter(w=>w!==wid) : [...list, wid]
+    const newVal = next.join(',')
+    api.updateEdificio(token, edId, { dashboard_widgets: newVal })
+      .then(() => {
+        setEdificios(es => es.map(e => String(e.id)===String(edId) ? {...e, dashboard_widgets: newVal} : e))
+        refreshEdificios()
+      })
+      .catch(e => alert('Error: '+e.message))
   }
 
   // ── Usuarios ─────────────────────────────────────────────────
@@ -145,9 +181,10 @@ export default function Mantenedor() {
   }
 
   const TABS = [
-    { id:'edificios',      icon:Building2, label:'Edificios'        },
-    { id:'usuarios',       icon:Users,     label:'Usuarios'         },
-    { id:'notificaciones', icon:Bell,      label:'Notificaciones'   },
+    { id:'edificios',      icon:Building2,      label:'Edificios'        },
+    { id:'usuarios',       icon:Users,          label:'Usuarios'         },
+    { id:'notificaciones', icon:Bell,           label:'Notificaciones'   },
+    { id:'dashboard',      icon:LayoutDashboard, label:'Dashboard'        },
   ]
 
   return (
@@ -279,6 +316,101 @@ export default function Mantenedor() {
               </tbody>
             </table></div>
           </div>}
+        </ErrorBoundary>
+      )}
+
+      {/* ── Tab Dashboard ── */}
+      {tab==='dashboard' && (
+        <ErrorBoundary>
+          <div style={{ marginBottom:20 }}>
+            <label style={{ fontSize:12, color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', display:'block', marginBottom:8 }}>
+              Seleccionar Edificio
+            </label>
+            <select className="form-control" style={{ maxWidth:360 }} value={dashEdificio} onChange={e=>setDashEdificio(e.target.value)}>
+              <option value="">— Elegir edificio —</option>
+              {edificios.map(ed=><option key={String(ed.id)} value={String(ed.id)}>{ed.nombre}</option>)}
+            </select>
+          </div>
+
+          {!dashEdificio && (
+            <div className="card"><div className="empty-state"><LayoutDashboard size={32}/><p>Selecciona un edificio para configurar su dashboard</p></div></div>
+          )}
+
+          {dashEdificio && (() => {
+            const ed = edificios.find(e => String(e.id) === dashEdificio)
+            if (!ed) return null
+            const activeWidgets = String(ed.dashboard_widgets || ALL_WIDGETS.join(',')).split(',').map(s=>s.trim()).filter(Boolean)
+
+            return (
+              <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+                <div style={{ padding:'12px 16px', background:'var(--bg-elevated)', borderRadius:'var(--radius-md)', border:'1px solid var(--border-subtle)', fontSize:13, color:'var(--text-muted)' }}>
+                  Configura qué widgets se muestran en el dashboard de <strong style={{ color:'var(--text-primary)' }}>{ed.nombre}</strong>.
+                  Los cambios se aplican de inmediato.
+                </div>
+
+                {DASHBOARD_WIDGETS_LISTA.map(group => (
+                  <div key={group.group} className="card" style={{ padding:'18px 22px' }}>
+                    <p style={{ fontSize:12, color:'var(--text-muted)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:14 }}>
+                      {group.group}
+                    </p>
+                    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                      {group.items.map(w => {
+                        const on = activeWidgets.includes(w.id)
+                        return (
+                          <label key={w.id} onClick={()=>toggleWidget(w.id, dashEdificio)}
+                            style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 14px', borderRadius:'var(--radius-md)', background: on?'var(--accent-glow)':'var(--bg-elevated)', border:`1px solid ${on?'rgba(27,152,224,0.3)':'var(--border-subtle)'}`, transition:'all 0.15s', userSelect:'none' }}>
+                            {/* Toggle switch */}
+                            <div style={{ position:'relative', width:40, height:22, borderRadius:11, background: on?'var(--accent)':'var(--border-main)', transition:'background 0.2s', flexShrink:0 }}>
+                              <div style={{ position:'absolute', top:3, left: on?20:3, width:16, height:16, borderRadius:'50%', background:'white', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }}/>
+                            </div>
+                            <span style={{ fontSize:13.5, color: on?'var(--accent-text)':'var(--text-secondary)', fontWeight: on?600:400 }}>{w.label}</span>
+                            {on && <span className="badge badge-green" style={{ marginLeft:'auto', fontSize:10 }}>Activo</span>}
+                          </label>
+                        )
+                      })}
+                    </div>
+                    <div style={{ display:'flex', gap:8, marginTop:14 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={()=>{
+                        const allIds = group.items.map(w=>w.id).join(',')
+                        const current = String(ed.dashboard_widgets||ALL_WIDGETS.join(',')).split(',').filter(Boolean)
+                        const others = current.filter(w=>!group.items.find(gi=>gi.id===w))
+                        const newVal = [...others, ...group.items.map(w=>w.id)].join(',')
+                        api.updateEdificio(token, dashEdificio, { dashboard_widgets: newVal })
+                          .then(()=>{ setEdificios(es=>es.map(e=>String(e.id)===dashEdificio?{...e,dashboard_widgets:newVal}:e)); refreshEdificios() })
+                          .catch(e=>alert('Error: '+e.message))
+                      }}>Activar todos</button>
+                      <button className="btn btn-ghost btn-sm" onClick={()=>{
+                        const current = String(ed.dashboard_widgets||ALL_WIDGETS.join(',')).split(',').filter(Boolean)
+                        const newVal = current.filter(w=>!group.items.find(gi=>gi.id===w)).join(',')
+                        api.updateEdificio(token, dashEdificio, { dashboard_widgets: newVal })
+                          .then(()=>{ setEdificios(es=>es.map(e=>String(e.id)===dashEdificio?{...e,dashboard_widgets:newVal}:e)); refreshEdificios() })
+                          .catch(e=>alert('Error: '+e.message))
+                      }}>Desactivar todos</button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Resumen */}
+                <div className="card" style={{ padding:'14px 20px' }}>
+                  <p style={{ fontSize:12, color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>Vista previa del dashboard</p>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                    {ALL_WIDGETS.map(wid => {
+                      const active = activeWidgets.includes(wid)
+                      const info = DASHBOARD_WIDGETS_LISTA.flatMap(g=>g.items).find(w=>w.id===wid)
+                      return (
+                        <span key={wid} className={`badge ${active?'badge-green':'badge-red'}`} style={{ fontSize:10.5 }}>
+                          {active?'✓':'✕'} {info?.label.split(': ')[1]||wid}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <p style={{ fontSize:11.5, color:'var(--text-dim)', marginTop:10 }}>
+                    {activeWidgets.length} de {ALL_WIDGETS.length} widgets activos
+                  </p>
+                </div>
+              </div>
+            )
+          })()}
         </ErrorBoundary>
       )}
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, X, Shield, CheckCircle, Clock, MapPin, Trash2 } from 'lucide-react'
-import ImageUpload from '../components/ImageUpload.jsx'
+import ImageUpload, { parseImages } from '../components/ImageUpload.jsx'
 import { useSheetData } from '../hooks/useSheetData.js'
 import { LoadingState, ErrorState } from '../components/LoadingState.jsx'
 
@@ -100,9 +100,9 @@ export default function RondasSeguridad() {
                     {r.novedades && (
                       <p style={{ marginTop:8, fontSize:12.5, color:'var(--text-secondary)', background:'var(--bg-elevated)', borderLeft:'3px solid var(--border-bright)', padding:'6px 10px', borderRadius:'0 6px 6px 0' }}>{r.novedades}</p>
                     )}
-                    {r.imagenes && String(r.imagenes).trim() && (
+                    {parseImages(r.imagenes).length > 0 && (
                       <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
-                        {String(r.imagenes).split(',').filter(Boolean).map((url,i)=>(
+                        {parseImages(r.imagenes).map((url,i)=>(
                           <img key={i} src={url.trim()} alt="" onClick={()=>window.open(url.trim(),'_blank')} style={{ width:64, height:64, objectFit:'cover', borderRadius:6, border:'1px solid var(--border-main)', cursor:'pointer' }}/>
                         ))}
                       </div>
