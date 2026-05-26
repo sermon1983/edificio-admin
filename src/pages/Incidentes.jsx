@@ -19,11 +19,19 @@ const EMPTY = {
 }
 
 function calcVigencia(fecha, prioridad) {
-  if (!fecha) return null
-  const dias     = DIAS_PRIORIDAD[prioridad] || 30
-  const limite   = new Date(new Date(fecha).getTime() + dias * 86400000)
-  const restantes = Math.ceil((limite - new Date()) / 86400000)
-  return { dias, limite: limite.toISOString().slice(0,10), restantes }
+  try {
+    if (!fecha) return null
+    const fechaStr = String(fecha).trim().slice(0, 10) // tomar solo yyyy-MM-dd
+    if (!fechaStr || fechaStr.length < 8) return null
+    const dias  = DIAS_PRIORIDAD[prioridad] || 30
+    const start = new Date(fechaStr)
+    if (isNaN(start.getTime())) return null  // fecha inválida → no crashear
+    const limite    = new Date(start.getTime() + dias * 86400000)
+    const restantes = Math.ceil((limite - new Date()) / 86400000)
+    return { dias, limite: limite.toISOString().slice(0, 10), restantes }
+  } catch (_) {
+    return null  // nunca crashear el render por una fecha rota
+  }
 }
 
 function VigenciaBadge({ fecha, prioridad, estado }) {
