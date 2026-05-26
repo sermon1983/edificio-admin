@@ -380,8 +380,9 @@ export default function Incidentes() {
                 </div>
                 <div className="form-group">
                   <label>Fecha de creación</label>
-                  <div style={{ padding:'9px 13px', background:'var(--bg-deep)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-md)', color:'var(--text-muted)', fontSize:14, fontFamily:'var(--font-mono)' }}>
-                    📅 {form.fecha} — <span style={{ fontSize:12, color:'var(--text-dim)' }}>El código se generará automáticamente</span>
+                  <div style={{ padding:'9px 13px', background:'var(--bg-deep)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-md)' }}>
+                    <p style={{ color:'var(--text-primary)', fontSize:14, fontFamily:'var(--font-mono)', fontWeight:500, margin:0 }}>📅 {form.fecha}</p>
+                    <p style={{ fontSize:11, color:'var(--text-dim)', marginTop:4, marginBottom:0 }}>El código único (INC-XXXXXX) se asignará al guardar</p>
                   </div>
                 </div>
                 <div className="form-group" style={{ gridColumn:'span 2' }}>

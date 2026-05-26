@@ -1,28 +1,29 @@
 // ============================================================
-//  AdminEdificio — Google Apps Script API v4
+//  Operapp — Google Apps Script API v4
 // ============================================================
 
 var DATA_SHEETS = ['gastos','consumos','rondas','incidentes','ordenes','recaudacion']
 
 var HEADERS = {
-  edificios:    ['id','nombre','direccion','unidades','color','activo','tipo','modulos'],
+  edificios:    ['id','nombre','direccion','unidades','color','activo','tipo','modulos','dashboard_widgets'],
   usuarios:     ['id','nombre','email','password_hash','rol','edificios_ids'],
   sesiones:     ['token','user_id','expiry'],
-  notif_config: ['id','edificio_id','nombre','evento','emails','activo'],
+  notif_config: ['id','edificio_id','nombre','evento','emails','activo','from_name','reply_to'],
   gastos:       ['id','concepto','monto','fecha','categoria','estado','proveedor'],
   consumos:     ['id','tipo','unidad','lectura_anterior','lectura_actual','mes','costo_unitario','estado'],
   rondas:       ['id','guardia','inicio','fin','zonas','novedades','estado','imagenes'],
-  incidentes:   ['id','titulo','tipo','prioridad','reportado_por','fecha','estado','descripcion','imagenes','comentarios','fecha_cierre'],
+  incidentes:   ['id','codigo','titulo','tipo','prioridad','reportado_por','fecha','estado','descripcion','imagenes','comentarios','fecha_cierre'],
   ordenes:      ['id','titulo','categoria','prioridad','asignado_a','fecha_creacion','fecha_limite','estado','descripcion','imagenes'],
   recaudacion:  ['id','periodo','unidad','propietario','monto','fecha_vencimiento','fecha_pago','estado','observaciones'],
 }
 
 var MODULOS_DEFAULT = 'gastos,consumos,rondas,incidentes,ordenes,recaudacion'
+var DASHBOARD_DEFAULT = 'card_gastos,card_recaudacion,card_incidentes,card_ordenes,chart_gastos,chart_incidentes,list_cobranzas,list_rondas'
 
 var PRIORIDAD_DIAS = { 'Baja':30, 'Media':20, 'Alta':10, 'Crítica':5 }
 
 var MES_FIELDS  = ['mes']
-var DATE_FIELDS = ['fecha','fecha_creacion','fecha_limite','fecha_vencimiento','fecha_pago']
+var DATE_FIELDS = ['fecha','fecha_creacion','fecha_limite','fecha_vencimiento','fecha_pago','fecha_cierre']
 var NUM_FIELDS  = ['id','monto','lectura_anterior','lectura_actual','costo_unitario','unidades']
 
 // ── Planilla ──────────────────────────────────────────────────
@@ -31,7 +32,7 @@ function getSpreadsheet() {
   var props = PropertiesService.getScriptProperties()
   var id    = props.getProperty('SPREADSHEET_ID')
   if (id) { try { return SpreadsheetApp.openById(id) } catch(e) {} }
-  var ss = SpreadsheetApp.create('AdminEdificio — Base de Datos')
+  var ss = SpreadsheetApp.create('Operapp — Base de Datos')
   props.setProperty('SPREADSHEET_ID', ss.getId())
   return ss
 }
@@ -40,7 +41,7 @@ function getImagesFolder() {
   var props    = PropertiesService.getScriptProperties()
   var folderId = props.getProperty('IMAGES_FOLDER_ID')
   if (folderId) { try { return DriveApp.getFolderById(folderId) } catch(e) {} }
-  var folder = DriveApp.createFolder('AdminEdificio_Imagenes')
+  var folder = DriveApp.createFolder('Operapp_Imagenes')
   props.setProperty('IMAGES_FOLDER_ID', folder.getId())
   return folder
 }
@@ -55,7 +56,17 @@ function fmtVal(header, val) {
   }
   if (DATE_FIELDS.indexOf(header) !== -1) {
     if (val instanceof Date) return Utilities.formatDate(val, tz, 'yyyy-MM-dd')
-    return String(val).slice(0,10)
+    // Si ya es un string con formato ISO, tomar solo los primeros 10 chars
+    var strVal = String(val).trim()
+    if (!strVal) return ''
+    // Si tiene formato 'yyyy-MM-dd' directamente
+    if (/^\d{4}-\d{2}-\d{2}/.test(strVal)) return strVal.slice(0, 10)
+    // Intentar parsear como fecha
+    try {
+      var d = new Date(strVal)
+      if (!isNaN(d.getTime())) return Utilities.formatDate(d, tz, 'yyyy-MM-dd')
+    } catch(e) {}
+    return strVal.slice(0, 10)
   }
   if (NUM_FIELDS.indexOf(header) !== -1) { var n = Number(val); return isNaN(n) ? val : n }
   if (val instanceof Date) return Utilities.formatDate(val, tz, 'yyyy-MM-dd HH:mm')
@@ -235,6 +246,45 @@ function doPost(e) {
   } catch(err) { return jsonError(err.message) }
 }
 
+
+// ── Helpers de imágenes para email ───────────────────────────
+function parseImagesGS(value) {
+  if (!value || !String(value).trim()) return []
+  var s = String(value).trim()
+  if (s.indexOf('|||') !== -1) return s.split('|||').filter(Boolean)
+  if (s.indexOf('data:') === 0) return [s]          // data URI única
+  return s.split(',').map(function(x){ return x.trim() }).filter(Boolean)
+}
+
+function dataUriToBlob(dataUri, filename) {
+  try {
+    var commaIdx = dataUri.indexOf(',')
+    if (commaIdx === -1) return null
+    var meta  = dataUri.substring(0, commaIdx)       // "data:image/jpeg;base64"
+    var b64   = dataUri.substring(commaIdx + 1)      // base64 data
+    var mime  = meta.split(':')[1].split(';')[0]     // "image/jpeg"
+    var bytes = Utilities.base64Decode(b64)
+    return Utilities.newBlob(bytes, mime, filename || 'imagen.jpg')
+  } catch(e) {
+    Logger.log('dataUriToBlob error: ' + e)
+    return null
+  }
+}
+
+function buildImageBlobs(imagenes) {
+  var blobs  = []
+  var imgList = parseImagesGS(imagenes)
+  for (var i = 0; i < imgList.length; i++) {
+    var img = imgList[i]
+    if (img.indexOf('data:') === 0) {
+      var blob = dataUriToBlob(img, 'foto_' + (i + 1) + '.jpg')
+      if (blob) blobs.push(blob)
+    }
+    // Drive URLs: no se adjuntan (requieren auth), se mencionan en el cuerpo
+  }
+  return blobs
+}
+
 // ── Emails ────────────────────────────────────────────────────
 function sendIncidentEmail(edificioId, evento, incidente, actor) {
   var configs = getSheetRows('notif_config').filter(function(c) {
@@ -255,17 +305,19 @@ function sendIncidentEmail(edificioId, evento, incidente, actor) {
   }
 
   var isNew       = evento === 'incidente_creado'
-  var asunto      = (isNew ? '[NUEVO INCIDENTE] ' : '[ACTUALIZACIÓN] ') + incidente.titulo + ' — ' + nomEdif
+  var codigoRef   = incidente.codigo ? ' [' + incidente.codigo + ']' : ''
+  var asunto      = (isNew ? '[NUEVO INCIDENTE]' : '[ACTUALIZACIÓN]') + codigoRef + ' ' + incidente.titulo + ' — ' + nomEdif
   var colorPrio   = { 'Crítica':'#dc2626','Alta':'#ea580c','Media':'#d97706','Baja':'#16a34a' }
   var color       = colorPrio[incidente.prioridad] || '#1B98E0'
 
   var html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8f9fa;padding:20px;">' +
     '<div style="background:#0F4C75;color:white;padding:20px 24px;border-radius:8px 8px 0 0;">' +
-    '<h2 style="margin:0;font-size:20px;">🏢 AdminEdificio</h2>' +
+    '<h2 style="margin:0;font-size:20px;">🏢 Operapp</h2>' +
     '<p style="margin:4px 0 0;opacity:0.8;font-size:13px;">' + nomEdif + '</p></div>' +
     '<div style="background:white;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;">' +
     '<h3 style="margin:0 0 16px;color:#111;">' + (isNew ? '🚨 Nuevo Incidente' : '🔄 Actualización de Incidente') + '</h3>' +
     '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+    (incidente.codigo?'<tr><td style="padding:8px 0;color:#666;width:130px;">Código</td><td style="padding:8px 0;"><code style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:13px;font-weight:700;color:#1B98E0;">'+incidente.codigo+'</code></td></tr>':'') +
     '<tr><td style="padding:8px 0;color:#666;width:130px;">Título</td><td style="padding:8px 0;font-weight:600;">' + (incidente.titulo||'') + '</td></tr>' +
     '<tr><td style="padding:8px 0;color:#666;">Tipo</td><td style="padding:8px 0;">' + (incidente.tipo||'') + '</td></tr>' +
     '<tr><td style="padding:8px 0;color:#666;">Prioridad</td><td style="padding:8px 0;"><span style="background:'+color+';color:white;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;">' + (incidente.prioridad||'') + '</span></td></tr>' +
@@ -278,10 +330,26 @@ function sendIncidentEmail(edificioId, evento, incidente, actor) {
     (!isNew && actor ? '<p style="margin-top:16px;font-size:12px;color:#9ca3af;">Actualizado por: ' + actor.nombre + '</p>' : '') +
     '</div></div>'
 
+  // Adjuntar imágenes del incidente
+  var imageBlobs = incidente.imagenes ? buildImageBlobs(incidente.imagenes) : []
+  if (imageBlobs.length > 0) {
+    html += '<div style="margin-top:16px;padding:12px 16px;background:#f0f9ff;border-radius:8px;border-left:4px solid #1B98E0;">' +
+      '<p style="margin:0;font-size:13px;color:#374151;">📎 <strong>' + imageBlobs.length + ' imagen' + (imageBlobs.length > 1 ? 'es adjuntas' : ' adjunta') + '</strong> a este incidente</p>' +
+      '</div>'
+  }
+
   configs.forEach(function(config) {
-    var emails = String(config.emails||'').split(',').map(function(e){return e.trim()}).filter(Boolean)
+    var emails   = String(config.emails||'').split(',').map(function(e){return e.trim()}).filter(Boolean)
+    var fromName = String(config.from_name||'Operapp')
+    var replyTo  = String(config.reply_to||'')
     emails.forEach(function(email) {
-      try { MailApp.sendEmail({ to:email, subject:asunto, htmlBody:html }) } catch(ex) { Logger.log('MailApp error: '+ex) }
+      try {
+        var opts = { to:email, subject:asunto, htmlBody:html, name:fromName }
+        if(replyTo) opts.replyTo = replyTo
+        if(imageBlobs.length > 0) opts.attachments = imageBlobs
+        MailApp.sendEmail(opts)
+        Logger.log('Email enviado a: ' + email + ' | adjuntos: ' + imageBlobs.length)
+      } catch(ex) { Logger.log('MailApp error: '+ex) }
     })
   })
 }
@@ -333,6 +401,7 @@ function createEdificio(data) {
   var newId = getNextId(sheet)
   data.id   = newId
   if (!data.modulos) data.modulos = MODULOS_DEFAULT
+  if (!data.dashboard_widgets) data.dashboard_widgets = DASHBOARD_DEFAULT
   var row   = HEADERS['edificios'].map(function(h){return data[h]!==undefined?data[h]:''})
   sheet.appendRow(row)
   for (var i=0;i<DATA_SHEETS.length;i++) {
@@ -402,15 +471,66 @@ function getRowById(sheetName, id) {
 function createDataRow(fullSheetName, baseName, data) {
   var ss=getSpreadsheet(); var sheet=ss.getSheetByName(fullSheetName)
   if(!sheet) throw new Error('Hoja no encontrada: '+fullSheetName)
-  var headers=HEADERS[baseName]; if(!headers) throw new Error('Headers no definidos: '+baseName)
-  data.id=getNextId(sheet)
-  var row=headers.map(function(h){return(data[h]!==undefined&&data[h]!==null)?data[h]:''})
-  sheet.appendRow(row); return data
+  var canonicalHeaders=HEADERS[baseName]
+  if(!canonicalHeaders) throw new Error('Headers no definidos: '+baseName)
+
+  data.id = getNextId(sheet)
+
+  // Auto-generar código único para incidentes: INC-YYYYMM-XXXX
+  if(baseName==='incidentes' && !data.codigo){
+    var now=new Date()
+    var yymm=String(now.getFullYear())+('0'+(now.getMonth()+1)).slice(-2)
+    data.codigo='INC-'+yymm+'-'+('0000'+data.id).slice(-4)
+  }
+
+  // Leer los headers REALES de la hoja (pueden diferir de HEADERS si se agregaron columnas nuevas)
+  var actualHeaders
+  if(sheet.getLastRow()===0){
+    // Hoja vacía: escribir headers canónicos
+    sheet.getRange(1,1,1,canonicalHeaders.length).setValues([canonicalHeaders])
+    styleHeader(sheet, canonicalHeaders.length)
+    sheet.setFrozenRows(1)
+    actualHeaders = canonicalHeaders.slice()
+  } else {
+    actualHeaders = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0]
+  }
+
+  // Agregar columnas que faltan en la hoja (ej: 'codigo' o 'fecha_cierre')
+  for(var k=0; k<canonicalHeaders.length; k++){
+    var colName=canonicalHeaders[k]
+    if(actualHeaders.indexOf(colName)===-1){
+      var newCol=actualHeaders.length+1
+      var hCell=sheet.getRange(1,newCol)
+      hCell.setValue(colName)
+      hCell.setBackground('#0F4C75'); hCell.setFontColor('#FFFFFF'); hCell.setFontWeight('bold')
+      actualHeaders.push(colName)
+      Logger.log('createDataRow: columna agregada: '+colName+' en '+fullSheetName)
+    }
+  }
+
+  // Construir la fila según el orden REAL de columnas de la hoja
+  var row=actualHeaders.map(function(h){
+    return(data[h]!==undefined&&data[h]!==null)?data[h]:''
+  })
+  sheet.appendRow(row)
+  return data
 }
 
 function updateRow(sheetName, id, data) {
   var ss=getSpreadsheet(); var sheet=ss.getSheetByName(sheetName); if(!sheet) return
-  var all=sheet.getDataRange().getValues(); var headers=all[0]
+  var all=sheet.getDataRange().getValues(); var headers=all[0].slice()
+
+  // Agrega columnas faltantes dinámicamente (ej: modulos, fecha_cierre)
+  for(var key in data){
+    if(!data.hasOwnProperty(key)||key==='id') continue
+    if(headers.indexOf(key)===-1){
+      var newCol=headers.length+1
+      var hCell=sheet.getRange(1,newCol)
+      hCell.setValue(key); hCell.setBackground('#0F4C75'); hCell.setFontColor('#FFFFFF'); hCell.setFontWeight('bold')
+      headers.push(key)
+      Logger.log('Columna agregada: '+key+' en '+sheetName)
+    }
+  }
   for(var i=1;i<all.length;i++){
     if(Number(all[i][0])===id){
       for(var j=0;j<headers.length;j++){if(data[headers[j]]!==undefined)sheet.getRange(i+1,j+1).setValue(data[headers[j]])}
@@ -446,7 +566,7 @@ function initSheets() {
   if(usSheet.getLastRow()<=1){usSheet.appendRow([1,'Administrador','admin@edificio.cl',hashPwd('admin123'),'superadmin','']);Logger.log('Admin creado')}
   var edSheet=ss.getSheetByName('edificios')
   if(edSheet.getLastRow()<=1){
-    edSheet.appendRow([1,'Edificio Las Torres','Av. Providencia 1234',48,'#1B98E0','true','edificio',MODULOS_DEFAULT])
+    edSheet.appendRow([1,'Edificio Las Torres','Av. Providencia 1234',48,'#1B98E0','true','edificio',MODULOS_DEFAULT,DASHBOARD_DEFAULT])
     for(var d=0;d<DATA_SHEETS.length;d++){
       var dName=DATA_SHEETS[d]; var sName=dName+'_1'
       var ds=ss.getSheetByName(sName); if(!ds){ds=ss.insertSheet(sName)}
@@ -472,3 +592,136 @@ function styleHeader(sheet,cols){
 
 function jsonOk(data){return ContentService.createTextOutput(JSON.stringify({ok:true,data:data})).setMimeType(ContentService.MimeType.JSON)}
 function jsonError(msg){return ContentService.createTextOutput(JSON.stringify({ok:false,error:msg})).setMimeType(ContentService.MimeType.JSON)}
+
+// ════════════════════════════════════════════════════════════
+//  VERIFICACIÓN DE INCIDENTES VENCIDOS — trigger diario
+// ════════════════════════════════════════════════════════════
+
+var DIAS_PRIORIDAD = { 'Crítica':5, 'Alta':10, 'Media':20, 'Baja':30 }
+
+/**
+ * Ejecutar manualmente UNA VEZ para autorizar DriveApp.
+ * Luego puedes subir imágenes desde la app.
+ */
+function testDriveSetup() {
+  var folder = getImagesFolder()
+  Logger.log('✅ DriveApp autorizado. Carpeta: ' + folder.getName())
+  Logger.log('🔗 URL: ' + folder.getUrl())
+}
+
+/**
+ * Revisa todos los edificios buscando incidentes vencidos
+ * y envía notificaciones por email.
+ * Configurar como trigger: Tiempo → Cada día → 9:00am
+ */
+function checkExpiredIncidents() {
+  var ss        = getSpreadsheet()
+  var edificios = getSheetRows('edificios')
+  var configs   = getSheetRows('notif_config').filter(function(c){ return String(c.activo)==='true' })
+  var hoy       = new Date(); hoy.setHours(0,0,0,0)
+  var manana    = new Date(hoy.getTime()+86400000)
+  var resumen   = []
+
+  Logger.log('=== checkExpiredIncidents: ' + Utilities.formatDate(hoy, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + ' ===')
+
+  for(var e=0; e<edificios.length; e++){
+    var edif = edificios[e]
+    var sheetName = 'incidentes_' + edif.id
+    var sheet = ss.getSheetByName(sheetName)
+    if(!sheet) continue
+
+    var incidentes = getSheetRows(sheetName).filter(function(i){
+      return i.estado !== 'Resuelto' && i.estado !== 'Cerrado' && i.fecha
+    })
+
+    for(var i=0; i<incidentes.length; i++){
+      var inc  = incidentes[i]
+      var dias = DIAS_PRIORIDAD[inc.prioridad] || 30
+      var inicio  = new Date(inc.fecha); inicio.setHours(0,0,0,0)
+      var limite  = new Date(inicio.getTime() + dias*86400000)
+      var restantes = Math.round((limite - hoy) / 86400000)
+
+      var tipo_alerta = null
+      if(restantes < 0)           tipo_alerta = 'vencido'     // ya venció
+      else if(restantes === 0)    tipo_alerta = 'vence_hoy'   // vence hoy
+      else if(restantes === 1)    tipo_alerta = 'vence_manana' // vence mañana
+
+      if(!tipo_alerta) continue
+
+      // Construir y enviar emails para este edificio
+      var cfgList = configs.filter(function(c){
+        return String(c.edificio_id)===String(edif.id) &&
+               (c.evento==='todos' || c.evento==='incidente_creado' || c.evento==='incidente_actualizado')
+      })
+      if(!cfgList.length) continue
+
+      var tz       = Session.getScriptTimeZone()
+      var fechaLimStr = Utilities.formatDate(limite, tz, 'dd/MM/yyyy')
+      var colorPrio   = { 'Crítica':'#dc2626','Alta':'#ea580c','Media':'#d97706','Baja':'#16a34a' }
+      var color       = colorPrio[inc.prioridad]||'#1B98E0'
+      var alertaTexto = tipo_alerta==='vencido' ? '⚠️ INCIDENTE VENCIDO' : tipo_alerta==='vence_hoy' ? '🔔 VENCE HOY' : '⏰ VENCE MAÑANA'
+      var codigoRef   = inc.codigo ? ' ['+inc.codigo+']' : ''
+      var asunto      = alertaTexto + codigoRef + ': ' + inc.titulo + ' — ' + edif.nombre
+
+      var html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8f9fa;padding:20px;">' +
+        '<div style="background:'+color+';color:white;padding:20px 24px;border-radius:8px 8px 0 0;">' +
+        '<h2 style="margin:0;font-size:20px;">'+alertaTexto+'</h2>' +
+        '<p style="margin:4px 0 0;opacity:0.9;font-size:13px;">' + edif.nombre + '</p></div>' +
+        '<div style="background:white;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+        (inc.codigo?'<tr><td style="padding:8px 0;color:#666;width:130px;">Código</td><td style="padding:8px 0;"><code style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:13px;font-weight:700;color:#1B98E0;">'+inc.codigo+'</code></td></tr>':'') +
+        '<tr><td style="padding:8px 0;color:#666;width:130px;">Título</td><td style="padding:8px 0;font-weight:600;">'+(inc.titulo||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Tipo</td><td style="padding:8px 0;">'+(inc.tipo||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Prioridad</td><td style="padding:8px 0;"><span style="background:'+color+';color:white;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;">'+(inc.prioridad||'')+'</span></td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Estado</td><td style="padding:8px 0;">'+(inc.estado||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Reportado por</td><td style="padding:8px 0;">'+(inc.reportado_por||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Fecha creación</td><td style="padding:8px 0;">'+(inc.fecha||'')+'</td></tr>' +
+        '<tr><td style="padding:8px 0;color:#666;">Fecha límite</td><td style="padding:8px 0;font-weight:700;color:'+color+';">'+fechaLimStr+' ('+dias+' días)</td></tr>' +
+        (restantes<0?'<tr><td style="padding:8px 0;color:#dc2626;font-weight:700;" colspan="2">⚠️ Venció hace '+Math.abs(restantes)+' días — Requiere atención inmediata</td></tr>':'') +
+        '</table>' +
+        (inc.descripcion?'<div style="margin-top:16px;padding:12px;background:#f3f4f6;border-radius:6px;font-size:13px;"><b>Descripción:</b><br>'+inc.descripcion+'</div>':'') +
+        '</div></div>'
+
+      cfgList.forEach(function(cfg){
+        var emails   = String(cfg.emails||'').split(',').map(function(em){return em.trim()}).filter(Boolean)
+        var fromName = String(cfg.from_name||'Operapp')
+        var replyTo  = String(cfg.reply_to||'')
+        emails.forEach(function(email){
+          try {
+            var opts = { to:email, subject:asunto, htmlBody:html, name:fromName }
+            if(replyTo) opts.replyTo = replyTo
+            MailApp.sendEmail(opts)
+            Logger.log('Email enviado a: '+email+' | '+asunto)
+          } catch(ex){ Logger.log('Error email: '+ex) }
+        })
+      })
+
+      resumen.push(edif.nombre + ' | ' + inc.titulo + ' | ' + tipo_alerta)
+    }
+  }
+
+  Logger.log('=== Resumen: ' + resumen.length + ' alertas enviadas ===')
+  if(resumen.length) resumen.forEach(function(r){ Logger.log('  - '+r) })
+  return resumen.length
+}
+
+/**
+ * Crea el trigger automático diario para checkExpiredIncidents.
+ * Ejecutar UNA SOLA VEZ desde el editor de Apps Script.
+ */
+function crearTriggerDiario() {
+  // Eliminar triggers existentes de esta función
+  var triggers = ScriptApp.getProjectTriggers()
+  for(var i=0; i<triggers.length; i++){
+    if(triggers[i].getHandlerFunction()==='checkExpiredIncidents'){
+      ScriptApp.deleteTrigger(triggers[i])
+    }
+  }
+  // Crear nuevo trigger diario a las 9am
+  ScriptApp.newTrigger('checkExpiredIncidents')
+    .timeBased()
+    .everyDays(1)
+    .atHour(9)
+    .create()
+  Logger.log('✅ Trigger diario creado: checkExpiredIncidents se ejecutará cada día a las 9am')
+}

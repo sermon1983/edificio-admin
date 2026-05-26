@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, Receipt, Droplets, Shield, AlertTriangle, Wrench, Building2, ChevronLeft, ChevronRight, X, Settings, DollarSign } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
+import { LOGO_SRC } from '../assets/logo.js'
 import './Sidebar.css'
 
 const ALL_NAV = [
@@ -27,10 +28,12 @@ export default function Sidebar({ mobileOpen, onClose }) {
       {mobileOpen && <div className="sidebar-backdrop" onClick={onClose}/>}
       <aside className={`sidebar ${collapsed?'collapsed':''} ${mobileOpen?'mobile-open':''}`}>
         <div className="sidebar-brand">
-          <div className="brand-icon"><Building2 size={20}/></div>
+          <div className="brand-icon-wrap">
+            <img src={LOGO_SRC} alt="Operapp" className="brand-logo-img"/>
+          </div>
           {!collapsed && (
             <div className="brand-text">
-              <span className="brand-name">AdminEdificio</span>
+              <span className="brand-name">Operapp</span>
               <span className="brand-sub">{building?.nombre || 'Sin edificio'}</span>
             </div>
           )}

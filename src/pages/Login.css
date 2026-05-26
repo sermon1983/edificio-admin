@@ -37,27 +37,26 @@
   margin-bottom: 32px;
 }
 
-.login-logo {
-  width: 60px; height: 60px;
-  background: var(--accent);
-  border-radius: 16px;
-  display: flex; align-items: center; justify-content: center;
-  color: white;
-  margin: 0 auto 16px;
-  box-shadow: 0 0 24px rgba(27,152,224,0.5);
+.login-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  width: 180px;
+  height: 180px;
 }
 
-.login-title {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
+.login-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 20px;
 }
 
 .login-sub {
   font-size: 13px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .login-form {
